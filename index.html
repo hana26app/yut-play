@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>유아용 윷놀이</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Jua&display=swap');
+
+        body {
+            font-family: 'Jua', sans-serif;
+            background-color: #f0fdf4;
+            user-select: none;
+            overflow: hidden;
+        }
+
+        #game-board-container {
+            position: relative;
+            width: min(76vh, 75vw);
+            height: min(76vh, 75vw);
+            background-color: #064e3b;
+            border-radius: 20px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+            margin: 10px auto;
+            border: 8px solid #166534;
+        }
+
+        svg.board-lines {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .board-point {
+            position: absolute;
+            width: 6vmin;
+            height: 6vmin;
+            background-color: #fef08a;
+            border: 3px solid #ffffff;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 2vmin;
+            font-weight: bold;
+            color: #b45309;
+            z-index: 10;
+        }
+        
+        .board-point.large {
+            width: 9vmin;
+            height: 9vmin;
+            border-width: 4px;
+        }
+
+        .board-point.center { top: 50%; left: 50%; }
+        .board-point.tl { top: 10%; left: 10%; } /* Top Left */
+        .board-point.tr { top: 10%; left: 90%; } /* Top Right */
+        .board-point.bl { top: 90%; left: 10%; } /* Bottom Left */
+        .board-point.br { top: 90%; left: 90%; } /* Bottom Right (새 출발/도착 지점) */
+
+        .board-point.t1 { top: 10%; left: 74%; }
+        .board-point.t2 { top: 10%; left: 58%; }
+        .board-point.t3 { top: 10%; left: 42%; }
+        .board-point.t4 { top: 10%; left: 26%; }
+        
+        .board-point.b1 { top: 90%; left: 26%; }
+        .board-point.b2 { top: 90%; left: 42%; }
+        .board-point.b3 { top: 90%; left: 58%; }
+        .board-point.b4 { top: 90%; left: 74%; }
+        
+        .board-point.l1 { top: 26%; left: 10%; }
+        .board-point.l2 { top: 42%; left: 10%; }
+        .board-point.l3 { top: 58%; left: 10%; }
+        .board-point.l4 { top: 74%; left: 10%; }
+        
+        .board-point.r1 { top: 74%; left: 90%; }
+        .board-point.r2 { top: 58%; left: 90%; }
+        .board-point.r3 { top: 42%; left: 90%; }
+        .board-point.r4 { top: 26%; left: 90%; }
+        
+        .board-point.d1 { top: 25%; left: 75%; }
+        .board-point.d2 { top: 35%; left: 65%; }
+        .board-point.d3 { top: 65%; left: 35%; }
+        .board-point.d4 { top: 75%; left: 25%; }
+        
+        .board-point.rd1 { top: 25%; left: 25%; }
+        .board-point.rd2 { top: 35%; left: 35%; }
+        .board-point.rd3 { top: 65%; left: 65%; }
+        .board-point.rd4 { top: 75%; left: 75%; }
+
+        .start-end-label {
+            position: absolute;
+            top: 82%; 
+            left: 82%; 
+            background-color: #ef4444;
+            color: white;
+            padding: 0.3vmin 1vmin;
+            border-radius: 8px;
+            font-size: 1.8vmin;
+            z-index: 15;
+            pointer-events: none;
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.5);
+            animation: bounce 2s infinite;
+            white-space: nowrap;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translate(-50%, -50%); }
+            50% { transform: translate(-50%, calc(-50% - 5px)); }
+        }
+
+        .arrow {
+            position: absolute;
+            color: #ffffff; 
+            font-size: 2.5vmin; 
+            z-index: 5;
+            pointer-events: none;
+            opacity: 1;
+            text-shadow: 1px 1px 3px rgba(0,0,0,0.6); 
+        }
+        
+        .arrow-up { top: 50%; left: 90%; transform: translate(-50%, -50%) rotate(0deg); } 
+        .arrow-left { top: 10%; left: 50%; transform: translate(-50%, -50%) rotate(270deg); } 
+        .arrow-down { top: 50%; left: 10%; transform: translate(-50%, -50%) rotate(180deg); } 
+        .arrow-right { top: 90%; left: 50%; transform: translate(-50%, -50%) rotate(90deg); } 
+        
+        .arrow-d1 { top: 30%; left: 70%; transform: translate(-50%, -50%) rotate(225deg); } 
+        .arrow-d2 { top: 70%; left: 30%; transform: translate(-50%, -50%) rotate(225deg); } 
+        .arrow-d3 { top: 30%; left: 30%; transform: translate(-50%, -50%) rotate(135deg); } 
+        .arrow-d4 { top: 70%; left: 70%; transform: translate(-50%, -50%) rotate(135deg); } 
+
+        #direction-modal, #modal-overlay, #help-modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7);
+            z-index: 200;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        #modal-overlay { z-index: 100; }
+        #help-modal { z-index: 300; }
+
+        #direction-box, #modal-box, #help-box {
+            background: #fffbeb;
+            padding: 2.5rem;
+            border-radius: 30px;
+            text-align: center;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.5);
+            border: 8px solid #f59e0b;
+            max-width: 80%;
+            animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        
+        #modal-box { border-color: #16a34a; background: white; }
+        #help-box { border-color: #14b8a6; background: #f0fdf4; text-align: left; width: 600px; max-width: 90%; }
+        
+        @keyframes popIn {
+            0% { transform: scale(0.5); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .direction-title { font-size: 3.5vmin; color: #b45309; margin-bottom: 1.5rem; text-shadow: 1px 1px 2px rgba(0,0,0,0.1); }
+        .direction-buttons { display: flex; justify-content: center; gap: 1.5rem; }
+        .dir-btn {
+            background: #3b82f6; color: white; border: 4px solid #2563eb; padding: 1rem 2rem; border-radius: 20px; font-size: 2.5vmin; cursor: pointer; transition: all 0.2s; font-family: 'Jua', sans-serif; box-shadow: 0 5px 15px rgba(59, 130, 246, 0.4);
+        }
+        .dir-btn.shortcut { background: #ef4444; border-color: #dc2626; box-shadow: 0 5px 15px rgba(239, 68, 68, 0.4); }
+        .dir-btn:hover { transform: translateY(-5px); filter: brightness(1.1); }
+        
+        #help-box h2 { text-align: center; font-size: 3.5vmin; margin-bottom: 1.5rem; color: #047857; border-bottom: 3px dashed #34d399; padding-bottom: 1rem; }
+        #help-box ul { list-style: none; padding: 0; margin-bottom: 2rem; font-size: 2.2vmin; line-height: 1.6; }
+        #help-box li { margin-bottom: 1.2rem; display: flex; align-items: flex-start; gap: 0.8rem; }
+        .help-close-btn { display: block; margin: 0 auto; background: #14b8a6; color: white; border: none; padding: 0.8rem 2.5rem; border-radius: 20px; font-size: 2.5vmin; cursor: pointer; font-family: 'Jua', sans-serif; transition: transform 0.2s; }
+        .help-close-btn:hover { transform: scale(1.05); }
+
+        .piece {
+            position: absolute; width: 4vmin; height: 4vmin; border-radius: 50%; cursor: pointer; z-index: 20; display: flex; justify-content: center; align-items: center; font-size: 2vmin; color: white; box-shadow: 2px 2px 5px rgba(0,0,0,0.4); transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); transform: translate(-50%, -50%); border: 2px solid rgba(255,255,255,0.9);
+        }
+        .piece:hover { transform: translate(-50%, -50%) scale(1.1); z-index: 30; }
+        .piece.dragging { opacity: 0.8; transform: translate(-50%, -50%) scale(1.2); z-index: 40; transition: none; }
+
+        .piece-count { position: absolute; top: -0.5vmin; right: -0.5vmin; background: #f59e0b; color: white; border-radius: 50%; width: 2.2vmin; height: 2.2vmin; font-size: 1.2vmin; display: flex; justify-content: center; align-items: center; font-weight: bold; border: 1px solid white; }
+
+        .teamA { background: linear-gradient(135deg, #3b82f6, #1d4ed8); } 
+        .teamB { background: linear-gradient(135deg, #ef4444, #b91c1c); } 
+
+        .waiting-area { display: flex; flex-direction: row; gap: 0.8vmin; padding: 0.5vmin 1vmin; background-color: rgba(255,255,255,0.7); border-radius: 15px; align-items: center; justify-content: center; border: 3px dashed #9ca3af; min-height: 5.5vmin; }
+        .waiting-area .piece { position: relative !important; transform: none !important; left: auto !important; top: auto !important; }
+        .waiting-area .piece:hover { transform: scale(1.1) !important; }
+
+        .finished-area { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding: 1vmin; gap: 1vmin; }
+        .finished-area .piece { position: relative !important; transform: none !important; left: auto !important; top: auto !important; margin: 0.2vmin; width: 3.5vmin; height: 3.5vmin; font-size: 1.5vmin; }
+        .finished-area .piece:hover { transform: scale(1.1) !important; }
+
+        .recording { animation: pulse-red 1.5s infinite; }
+        @keyframes pulse-red { 0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); } 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); } }
+    </style>
+</head>
+<body class="h-screen w-screen flex flex-col justify-between p-2 md:p-4 overflow-hidden">
+
+    <div class="flex justify-between items-center w-full px-1 py-1 gap-4 z-10 relative">
+        <div class="flex-1 flex items-center gap-2 md:gap-4 bg-blue-100 p-2 rounded-2xl border-4 border-blue-400 shadow-md min-w-0">
+            <div class="flex items-center gap-1 shrink-0 pl-2">
+                <input type="text" id="teamA-name" class="text-sm md:text-xl font-bold text-blue-800 bg-transparent border-b-2 border-blue-400 focus:outline-none w-14 md:w-20 text-center" value="파랑팀">
+                <button id="mic-btn-A" class="bg-blue-500 hover:bg-blue-600 text-white rounded-full w-8 h-8 md:w-10 md:h-10 flex items-center justify-center transition-colors shadow-md text-sm md:text-base shrink-0">🎤</button>
+            </div>
+            <div id="waiting-A" class="waiting-area flex-1 border-blue-300 bg-blue-50/50 overflow-hidden"></div>
+        </div>
+
+        <div class="flex flex-col items-center gap-1 shrink-0 px-2">
+            <div class="flex items-center gap-2">
+                <h1 class="text-lg md:text-3xl font-bold text-green-800 drop-shadow-md whitespace-nowrap">즐거운 윷놀이</h1>
+                <button id="help-btn" class="bg-teal-500 text-white rounded-full w-6 h-6 md:w-8 md:h-8 flex items-center justify-center font-bold text-sm md:text-xl shadow-md hover:bg-teal-600 transition-transform hover:scale-110 border-2 border-white cursor-pointer" title="사용 방법">?</button>
+            </div>
+            <button id="reset-btn" class="bg-yellow-400 hover:bg-yellow-500 text-yellow-900 font-bold py-1 px-3 md:py-2 md:px-5 rounded-full text-xs md:text-lg shadow-md border-2 border-yellow-600 transition-transform active:scale-95 whitespace-nowrap flex items-center gap-1">
+                🔄 다시 시작
+            </button>
+        </div>
+
+        <div class="flex-1 flex items-center gap-2 md:gap-4 bg-red-100 p-2 rounded-2xl border-4 border-red-400 shadow-md min-w-0">
+            <div id="waiting-B" class="waiting-area flex-1 border-red-300 bg-red-50/50 overflow-hidden"></div>
+            <div class="flex items-center gap-1 shrink-0 pr-2">
+                <button id="mic-btn-B" class="bg-red-500 hover:bg-red-600 text-white rounded-full w-8 h-8 md:w-10 md:h-10 flex items-center justify-center transition-colors shadow-md text-sm md:text-base shrink-0">🎤</button>
+                <input type="text" id="teamB-name" class="text-sm md:text-xl font-bold text-red-800 bg-transparent border-b-2 border-red-400 focus:outline-none w-14 md:w-20 text-center" value="빨강팀">
+            </div>
+        </div>
+    </div>
+
+    <div class="flex-grow flex justify-center items-center w-full px-2 md:px-4 pb-12 gap-2 md:gap-6">
+        
+        <div class="flex flex-col items-center h-[min(76vh,75vw)] w-16 md:w-24">
+            <div class="w-full bg-blue-600 text-white text-center font-bold py-2 rounded-t-xl text-sm shadow-md z-10">도착</div>
+            <div id="finished-A" class="finished-area w-full flex-1 bg-blue-50/80 border-4 border-dashed border-blue-400 border-t-0 rounded-b-xl shadow-inner relative"></div>
+        </div>
+
+        <div id="game-board-container">
+            <svg class="board-lines">
+                <line x1="10%" y1="10%" x2="90%" y2="10%" stroke="white" stroke-width="4" stroke-dasharray="10,10" />
+                <line x1="10%" y1="90%" x2="90%" y2="90%" stroke="white" stroke-width="4" stroke-dasharray="10,10" />
+                <line x1="10%" y1="10%" x2="10%" y2="90%" stroke="white" stroke-width="4" stroke-dasharray="10,10" />
+                <line x1="90%" y1="10%" x2="90%" y2="90%" stroke="white" stroke-width="4" stroke-dasharray="10,10" />
+                <line x1="10%" y1="10%" x2="90%" y2="90%" stroke="white" stroke-width="4" stroke-dasharray="10,10" />
+                <line x1="90%" y1="10%" x2="10%" y2="90%" stroke="white" stroke-width="4" stroke-dasharray="10,10" />
+            </svg>
+
+            <div class="arrow arrow-up">▲</div>
+            <div class="arrow arrow-left">▲</div>
+            <div class="arrow arrow-down">▲</div>
+            <div class="arrow arrow-right">▲</div>
+            <div class="arrow arrow-d1">▲</div>
+            <div class="arrow arrow-d2">▲</div>
+            <div class="arrow arrow-d3">▲</div>
+            <div class="arrow arrow-d4">▲</div>
+
+            <div class="board-point large tl" data-id="tl"></div>
+            <div class="board-point large tr" data-id="tr"></div>
+            <div class="board-point large bl" data-id="bl"></div>
+            <div class="board-point large br" data-id="br"></div>
+            <div class="board-point large center" data-id="center"></div>
+
+            <div class="board-point t1" data-id="t1"></div><div class="board-point t2" data-id="t2"></div><div class="board-point t3" data-id="t3"></div><div class="board-point t4" data-id="t4"></div>
+            <div class="board-point b1" data-id="b1"></div><div class="board-point b2" data-id="b2"></div><div class="board-point b3" data-id="b3"></div><div class="board-point b4" data-id="b4"></div>
+            <div class="board-point l1" data-id="l1"></div><div class="board-point l2" data-id="l2"></div><div class="board-point l3" data-id="l3"></div><div class="board-point l4" data-id="l4"></div>
+            <div class="board-point r1" data-id="r1"></div><div class="board-point r2" data-id="r2"></div><div class="board-point r3" data-id="r3"></div><div class="board-point r4" data-id="r4"></div>
+            
+            <div class="board-point d1" data-id="d1"></div><div class="board-point d2" data-id="d2"></div><div class="board-point d3" data-id="d3"></div><div class="board-point d4" data-id="d4"></div>
+            <div class="board-point rd1" data-id="rd1"></div><div class="board-point rd2" data-id="rd2"></div><div class="board-point rd3" data-id="rd3"></div><div class="board-point rd4" data-id="rd4"></div>
+
+            <div class="start-end-label">출발/<br>도착</div>
+            
+            <div id="pieces-layer" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;"></div>
+        </div>
+
+        <div class="flex flex-col items-center h-[min(76vh,75vw)] w-16 md:w-24">
+            <div class="w-full bg-red-600 text-white text-center font-bold py-2 rounded-t-xl text-sm shadow-md z-10">도착</div>
+            <div id="finished-B" class="finished-area w-full flex-1 bg-red-50/80 border-4 border-dashed border-red-400 border-t-0 rounded-b-xl shadow-inner relative"></div>
+        </div>
+    </div>
+
+    <div id="modal-overlay">
+        <div id="modal-box">
+            <p id="modal-msg" class="font-bold text-[#b45309] text-3xl mb-6"></p>
+            <button id="modal-close" class="bg-green-500 text-white px-8 py-3 rounded-full font-bold shadow-md hover:bg-green-600 text-2xl transition-transform hover:scale-105">확인</button>
+        </div>
+    </div>
+
+    <div id="direction-modal">
+        <div id="direction-box">
+            <div id="direction-title" class="direction-title">어디로 갈까요?</div>
+            <div class="direction-buttons">
+                <button class="dir-btn shortcut" onclick="closeDirectionModal()">✨ 마법의 지름길로 슝~!</button>
+                <button class="dir-btn" onclick="closeDirectionModal()">🚶 빙~ 둘러서 갈래요!</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="help-modal">
+        <div id="help-box">
+            <h2>🎲 윷놀이 보드 사용 방법 🎲</h2>
+            <ul>
+                <li><span class="icon">🎤</span> <b>팀 이름 바꾸기:</b> 마이크 버튼을 누르고 말하면 팀 이름이 바뀌어요!</li>
+                <li><span class="icon">👆</span> <b>말 움직이기:</b> 대기소에 있는 말을 꾹 눌러서 윷판의 노란색 동그라미 위로 끌어다 놓으세요.</li>
+                <li><span class="icon">🤝</span> <b>업기:</b> 우리 팀 말이 있는 곳에 또 가면, 말이 하나로 합쳐지고 숫자가 생겨요.</li>
+                <li><span class="icon">💥</span> <b>잡기:</b> 다른 팀 말이 있는 곳에 가면 상대편 말이 쫓겨나요!</li>
+                <li><span class="icon">🚀</span> <b>지름길:</b> 큰 동그라미(모서리)에 도착하면 아이들과 함께 어느 길로 갈지 이야기해 보세요.</li>
+                <li><span class="icon">🎉</span> <b>도착:</b> 윷판을 다 돌고 '출발/도착' 지점에 놓으면 자동으로 도착칸에 들어갑니다!</li>
+            </ul>
+            <button id="close-help-btn" class="help-close-btn">알겠어요!</button>
+        </div>
+    </div>
+
+    <script>
+        const container = document.getElementById('game-board-container');
+        const waitingA = document.getElementById('waiting-A');
+        const waitingB = document.getElementById('waiting-B');
+        const finishedA = document.getElementById('finished-A');
+        const finishedB = document.getElementById('finished-B');
+        const piecesLayer = document.getElementById('pieces-layer');
+        const resetBtn = document.getElementById('reset-btn');
+        const modalOverlay = document.getElementById('modal-overlay');
+        const modalMsg = document.getElementById('modal-msg');
+        const modalClose = document.getElementById('modal-close');
+        
+        const directionModal = document.getElementById('direction-modal');
+        const directionTitle = document.getElementById('direction-title');
+
+        const helpBtn = document.getElementById('help-btn');
+        const helpModal = document.getElementById('help-modal');
+        const closeHelpBtn = document.getElementById('close-help-btn');
+
+        let draggedPiece = null;
+        let offsetX = 0;
+        let offsetY = 0;
+        
+        const shapes = ['circle', 'square', 'heart', 'star'];
+        const shapeContent = { 'circle': '●', 'square': '■', 'heart': '♥', 'star': '★' };
+
+        function showModal(msg) {
+            modalMsg.textContent = msg;
+            modalOverlay.style.display = 'flex';
+        }
+
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        let recognition = null;
+
+        if (SpeechRecognition) {
+            recognition = new SpeechRecognition();
+            recognition.lang = 'ko-KR';
+            recognition.interimResults = false;
+            recognition.maxAlternatives = 1;
+        }
+
+        function setupMic(btnId, inputId) {
+            const btn = document.getElementById(btnId);
+            const input = document.getElementById(inputId);
+
+            btn.addEventListener('click', () => {
+                if (!recognition) {
+                    showModal("이 브라우저는 마이크 입력을 지원하지 않아요. 😢");
+                    return;
+                }
+                btn.classList.add('recording');
+                recognition.start();
+
+                recognition.onresult = (event) => {
+                    input.value = event.results[0][0].transcript;
+                    btn.classList.remove('recording');
+                };
+
+                recognition.onspeechend = () => {
+                    recognition.stop();
+                    btn.classList.remove('recording');
+                };
+
+                recognition.onerror = (event) => {
+                    btn.classList.remove('recording');
+                    showModal("마이크 소리를 잘 못 들었어요. 다시 해볼까요?");
+                };
+            });
+        }
+
+        setupMic('mic-btn-A', 'teamA-name');
+        setupMic('mic-btn-B', 'teamB-name');
+
+        function createPieces() {
+            waitingA.innerHTML = '';
+            waitingB.innerHTML = '';
+            finishedA.innerHTML = '';
+            finishedB.innerHTML = '';
+            piecesLayer.innerHTML = '';
+
+            for (let i = 0; i < 4; i++) {
+                createSinglePiece('A', i, waitingA);
+                createSinglePiece('B', i, waitingB);
+            }
+        }
+
+        function createSinglePiece(team, index, parent) {
+            const piece = document.createElement('div');
+            const shape = shapes[index];
+            piece.className = `piece team${team} shape-${shape}`;
+            piece.id = `piece-${team}-${index}-${Date.now()}`;
+            piece.textContent = shapeContent[shape];
+            
+            piece.dataset.team = team;
+            piece.dataset.count = "1";
+            piece.dataset.currentPoint = "";
+
+            const badge = document.createElement('div');
+            badge.className = 'piece-count';
+            badge.style.display = 'none';
+            badge.textContent = '1';
+            piece.appendChild(badge);
+
+            piece.addEventListener('mousedown', startDrag);
+            piece.addEventListener('touchstart', startDrag, {passive: false});
+
+            parent.appendChild(piece);
+        }
+
+        function startDrag(e) {
+            if (e.type === 'touchstart') e.preventDefault();
+            
+            draggedPiece = this;
+            draggedPiece.classList.add('dragging');
+            draggedPiece.dataset.prevPoint = draggedPiece.dataset.currentPoint || "";
+            
+            if (draggedPiece.parentElement !== piecesLayer) {
+                const containerRect = container.getBoundingClientRect();
+                piecesLayer.appendChild(draggedPiece);
+                draggedPiece.style.pointerEvents = 'auto';
+                
+                let clientX = e.type === 'touchstart' ? e.touches[0].clientX : e.clientX;
+                let clientY = e.type === 'touchstart' ? e.touches[0].clientY : e.clientY;
+                
+                draggedPiece.style.left = `${clientX - containerRect.left}px`;
+                draggedPiece.style.top = `${clientY - containerRect.top}px`;
+            }
+
+            let clientX = e.type === 'touchstart' ? e.touches[0].clientX : e.clientX;
+            let clientY = e.type === 'touchstart' ? e.touches[0].clientY : e.clientY;
+
+            const rect = draggedPiece.getBoundingClientRect();
+            offsetX = clientX - (rect.left + rect.width / 2);
+            offsetY = clientY - (rect.top + rect.height / 2);
+
+            document.addEventListener('mousemove', drag);
+            document.addEventListener('touchmove', drag, {passive: false});
+            document.addEventListener('mouseup', endDrag);
+            document.addEventListener('touchend', endDrag);
+        }
+
+        function drag(e) {
+            if (!draggedPiece) return;
+            if (e.type === 'touchmove') e.preventDefault();
+
+            let clientX = e.type === 'touchmove' ? e.touches[0].clientX : e.clientX;
+            let clientY = e.type === 'touchmove' ? e.touches[0].clientY : e.clientY;
+
+            const containerRect = container.getBoundingClientRect();
+            let x = clientX - containerRect.left - offsetX;
+            let y = clientY - containerRect.top - offsetY;
+
+            draggedPiece.style.left = `${(x / containerRect.width) * 100}%`;
+            draggedPiece.style.top = `${(y / containerRect.height) * 100}%`;
+        }
+
+        function endDrag(e) {
+            if (!draggedPiece) return;
+
+            document.removeEventListener('mousemove', drag);
+            document.removeEventListener('touchmove', drag);
+            document.removeEventListener('mouseup', endDrag);
+            document.removeEventListener('touchend', endDrag);
+
+            draggedPiece.classList.remove('dragging');
+
+            const pieceRect = draggedPiece.getBoundingClientRect();
+            const pieceCenterX = pieceRect.left + pieceRect.width / 2;
+            const pieceCenterY = pieceRect.top + pieceRect.height / 2;
+
+            const team = draggedPiece.dataset.team;
+            const finishedBox = document.getElementById(`finished-${team}`);
+            const finishedZone = finishedBox.parentElement;
+            const finishedRect = finishedZone.getBoundingClientRect();
+
+            let isFinishedDrop = false;
+            if (
+                pieceCenterX >= finishedRect.left - window.innerWidth * 0.1 &&
+                pieceCenterX <= finishedRect.right + window.innerWidth * 0.1 &&
+                pieceCenterY >= finishedRect.top - 100 &&
+                pieceCenterY <= finishedRect.bottom + 100
+            ) {
+                isFinishedDrop = true;
+            }
+
+            if (isFinishedDrop) {
+                const isSilent = (draggedPiece.dataset.prevPoint === "finished");
+                finishPiece(draggedPiece, team, finishedBox, isSilent);
+                draggedPiece = null;
+                return;
+            }
+
+            const points = document.querySelectorAll('.board-point');
+            let closestPoint = null;
+            let minDistance = Infinity;
+
+            points.forEach(point => {
+                const pointRect = point.getBoundingClientRect();
+                const pointCenterX = pointRect.left + pointRect.width / 2;
+                const pointCenterY = pointRect.top + pointRect.height / 2;
+
+                const dist = Math.hypot(pieceCenterX - pointCenterX, pieceCenterY - pointCenterY);
+                const snapDistance = window.innerWidth * 0.08; 
+
+                if (dist < minDistance && dist < snapDistance) {
+                    minDistance = dist;
+                    closestPoint = point;
+                }
+            });
+
+            if (closestPoint) {
+                // 한 바퀴 돌고 온 말이 'br(도착)' 지점에 놓였을 때 자동 도착 처리
+                if (closestPoint.dataset.id === 'br' && draggedPiece.dataset.prevPoint !== "" && draggedPiece.dataset.prevPoint !== "finished") {
+                    finishPiece(draggedPiece, team, finishedBox, false);
+                } else if (draggedPiece.dataset.prevPoint === closestPoint.dataset.id) {
+                    snapToPointSilent(draggedPiece, closestPoint);
+                } else {
+                    snapToPoint(draggedPiece, closestPoint);
+                }
+            } else {
+                const prevPointId = draggedPiece.dataset.prevPoint;
+                if (prevPointId && prevPointId !== "finished" && prevPointId !== "") {
+                    const prevPointElem = document.querySelector(`.board-point[data-id="${prevPointId}"]`);
+                    if (prevPointElem) {
+                        snapToPointSilent(draggedPiece, prevPointElem);
+                    } else {
+                        returnToWaitingArea(draggedPiece, parseInt(draggedPiece.dataset.count));
+                    }
+                } else if (prevPointId === "finished") {
+                    finishPiece(draggedPiece, team, finishedBox, true);
+                } else {
+                    returnToWaitingArea(draggedPiece, parseInt(draggedPiece.dataset.count));
+                }
+            }
+
+            draggedPiece = null;
+        }
+
+        function snapToPointSilent(piece, point) {
+            const pointId = point.dataset.id;
+            piece.dataset.currentPoint = pointId;
+            
+            const containerRect = container.getBoundingClientRect();
+            const pointRect = point.getBoundingClientRect();
+            const pointCenterX = pointRect.left - containerRect.left + (pointRect.width / 2);
+            const pointCenterY = pointRect.top - containerRect.top + (pointRect.height / 2);
+            
+            piece.style.left = `${(pointCenterX / containerRect.width) * 100}%`;
+            piece.style.top = `${(pointCenterY / containerRect.height) * 100}%`;
+        }
+
+        function snapToPoint(piece, point) {
+            const pointId = point.dataset.id;
+            const existingPieces = Array.from(piecesLayer.children).filter(p => p.dataset.currentPoint === pointId && p !== piece);
+            const teamName = document.getElementById(`team${piece.dataset.team}-name`).value;
+            
+            if (existingPieces.length > 0) {
+                const targetPiece = existingPieces[0];
+                
+                if (targetPiece.dataset.team === piece.dataset.team) {
+                    const newCount = parseInt(targetPiece.dataset.count) + parseInt(piece.dataset.count);
+                    targetPiece.dataset.count = newCount;
+                    
+                    const badge = targetPiece.querySelector('.piece-count');
+                    badge.textContent = newCount;
+                    badge.style.display = 'flex';
+                    
+                    targetPiece.style.transform = 'translate(-50%, -50%) scale(1.2)';
+                    setTimeout(() => targetPiece.style.transform = 'translate(-50%, -50%)', 300);
+
+                    piece.remove();
+                    showModal(`우와! ${teamName} 말이 업혔어요!`);
+                    return; 
+                } else {
+                    const caughtCount = parseInt(targetPiece.dataset.count);
+                    returnToWaitingArea(targetPiece, caughtCount);
+                    showModal(`야호! ${teamName}(이)가 상대편 말을 잡았어요! 한 번 더 윷을 던지세요!`);
+                }
+            }
+
+            piece.dataset.currentPoint = pointId;
+            const containerRect = container.getBoundingClientRect();
+            const pointRect = point.getBoundingClientRect();
+            const pointCenterX = pointRect.left - containerRect.left + (pointRect.width / 2);
+            const pointCenterY = pointRect.top - containerRect.top + (pointRect.height / 2);
+            
+            piece.style.left = `${(pointCenterX / containerRect.width) * 100}%`;
+            piece.style.top = `${(pointCenterY / containerRect.height) * 100}%`;
+
+            if (pointId === 'tr' || pointId === 'tl' || pointId === 'center') {
+                setTimeout(() => {
+                    if (pointId === 'tr') {
+                        directionTitle.innerHTML = "야호! 비밀 길이에요!<br>마법의 길로 폴짝 뛰어볼까?";
+                    } else if (pointId === 'tl') {
+                        directionTitle.innerHTML = "우와! 지름길 발견!<br>미끄럼틀 타고 가운데로 쏙~ 갈까요?";
+                    } else if (pointId === 'center') {
+                        directionTitle.innerHTML = "가운데 도착!<br>어느 쪽으로 슝~ 날아갈까요?";
+                    }
+                    directionModal.style.display = 'flex';
+                }, 400); 
+            }
+        }
+
+        function finishPiece(piece, team, finishedBox, isSilent = false) {
+            piece.dataset.currentPoint = "finished";
+            finishedBox.appendChild(piece);
+            
+            const count = parseInt(piece.dataset.count);
+            const teamInputName = document.getElementById(`team${team}-name`).value;
+            
+            let totalFinished = 0;
+            const finishedPieces = finishedBox.querySelectorAll('.piece');
+            finishedPieces.forEach(p => {
+                totalFinished += parseInt(p.dataset.count);
+            });
+
+            if (!isSilent) {
+                if (totalFinished >= 4) {
+                    showModal(`🎉 우와! ${teamInputName} 말이 모두 도착했어요! 승리! 🎉`);
+                    triggerConfetti();
+                } else {
+                    let msg = `🎉 ${teamInputName} 말이 무사히 도착했어요! 축하합니다!`;
+                    if (count > 1) {
+                        msg = `🎉 우와! ${teamInputName} 말 ${count}개가 한꺼번에 도착했어요! 대단해요!`;
+                    }
+                    showModal(msg);
+                }
+            }
+        }
+
+        function triggerConfetti() {
+            var duration = 3 * 1000;
+            var animationEnd = Date.now() + duration;
+            var defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 1000 };
+
+            function randomInRange(min, max) { return Math.random() * (max - min) + min; }
+
+            var interval = setInterval(function() {
+                var timeLeft = animationEnd - Date.now();
+                if (timeLeft <= 0) { return clearInterval(interval); }
+                var particleCount = 50 * (timeLeft / duration);
+                confetti(Object.assign({}, defaults, { particleCount, origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 } }));
+                confetti(Object.assign({}, defaults, { particleCount, origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } }));
+            }, 250);
+        }
+
+        function returnToWaitingArea(pieceElem, count = 1) {
+            const team = pieceElem.dataset.team;
+            const waitingDiv = team === 'A' ? waitingA : waitingB;
+            pieceElem.remove();
+
+            const currentPiecesInWaiting = waitingDiv.children.length;
+            const piecesToCreate = Math.min(count, 4 - currentPiecesInWaiting);
+            
+            for(let i=0; i<piecesToCreate; i++) {
+                const usedShapes = Array.from(waitingDiv.children).map(p => p.className.match(/shape-(\w+)/)[1]);
+                let shapeIndex = 0;
+                for (let j = 0; j < 4; j++) {
+                    if (!usedShapes.includes(shapes[j])) {
+                        shapeIndex = j;
+                        break;
+                    }
+                }
+                createSinglePiece(team, shapeIndex, waitingDiv);
+            }
+        }
+
+        function closeDirectionModal() { directionModal.style.display = 'none'; }
+        modalClose.addEventListener('click', () => { modalOverlay.style.display = 'none'; });
+        helpBtn.addEventListener('click', () => { helpModal.style.display = 'flex'; });
+        closeHelpBtn.addEventListener('click', () => { helpModal.style.display = 'none'; });
+
+        resetBtn.addEventListener('click', () => {
+            resetBtn.classList.add('animate-spin');
+            setTimeout(() => {
+                resetBtn.classList.remove('animate-spin');
+                createPieces();
+                showModal("윷놀이를 다시 시작합니다! 재미있게 놀아봐요!");
+            }, 500);
+        });
+
+        window.onload = () => { createPieces(); };
+
+    </script>
+</body>
+</html>
